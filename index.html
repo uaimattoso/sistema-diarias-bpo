@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Pagamentos - Diárias</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #111827;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+            --input-focus-ring: rgba(79, 70, 229, 0.2);
+            --error-color: #ef4444;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container { width: 100%; max-width: 900px; }
+        .header { text-align: center; margin-bottom: 32px; }
+        .header h1 { font-size: 28px; font-weight: 700; color: var(--text-main); margin-bottom: 8px; }
+        .header p { font-size: 15px; color: var(--text-muted); }
+
+        .header-actions { display: flex; justify-content: center; margin-top: 16px; }
+        .btn-manage-colabs {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: #fff; border: none; border-radius: 10px;
+            padding: 10px 20px; font-size: 14px; font-weight: 600;
+            cursor: pointer; transition: opacity 0.2s, transform 0.1s;
+            box-shadow: 0 4px 12px rgba(79,70,229,0.3);
+        }
+        .btn-manage-colabs:hover { opacity: 0.9; }
+        .btn-manage-colabs:active { transform: scale(0.98); }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+            margin-bottom: 32px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .filter-bar {
+            background-color: #f9fafb;
+            border: 1px solid var(--border-color);
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .filter-bar label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .section-subtitle {
+            font-size: 14px;
+            color: var(--primary-color);
+            font-weight: 600;
+            background-color: #eef2ff;
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 6px;
+        }
+
+        /* Grid do formulário principal – 2 colunas, escopado no #paymentForm */
+        #paymentForm .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .form-group { margin-bottom: 12px; position: relative; }
+        .form-group.full-width { grid-column: 1 / -1; }
+        .form-group label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 8px; color: var(--text-main); }
+
+        .form-control {
+            width: 100%;
+            height: 48px;
+            padding: 12px 16px;
+            font-size: 15px;
+            font-family: 'Inter', sans-serif;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: #ffffff;
+            color: var(--text-main);
+            transition: all 0.2s ease;
+            appearance: none;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 4px var(--input-focus-ring);
+        }
+        .form-control:disabled, .form-control[readonly] {
+            background-color: #f3f4f6;
+            color: var(--text-muted);
+            cursor: not-allowed;
+            border-color: #e5e7eb;
+        }
+
+        select.form-control {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 12px center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 40px;
+            cursor: pointer;
+        }
+        select.form-control:disabled {
+            cursor: not-allowed;
+            background-image: none;
+        }
+
+        .locked-badge {
+            position: absolute; right: 12px; top: 42px;
+            font-size: 11px; color: var(--text-muted);
+            display: flex; align-items: center; gap: 4px;
+        }
+
+        .currency-symbol { position: absolute; left: 16px; top: 41px; color: var(--text-muted); font-weight: 500; pointer-events: none; }
+        .input-with-symbol { padding-left: 48px; }
+
+        .btn-submit, .btn-export {
+            width: 100%;
+            height: 48px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #ffffff;
+            background-color: var(--primary-color);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .btn-submit:hover { background-color: var(--primary-hover); }
+        .btn-submit:active, .btn-export:active { transform: scale(0.98); }
+
+        .btn-export { background-color: #10b981; margin-top: 10px; margin-bottom: 40px; }
+        .btn-export:hover { background-color: #059669; }
+
+        .action-buttons { display: flex; gap: 8px; justify-content: center; }
+
+        .btn-delete {
+            background-color: #fee2e2; color: #dc2626; border: none; padding: 6px 10px; border-radius: 6px;
+            font-size: 12px; font-weight: 600; cursor: pointer; transition: background-color 0.2s ease;
+        }
+        .btn-delete:hover { background-color: #fecaca; }
+
+        .btn-edit {
+            background-color: #fef3c7; color: #d97706; border: none; padding: 6px 10px; border-radius: 6px;
+            font-size: 12px; font-weight: 600; cursor: pointer; transition: background-color 0.2s ease;
+        }
+        .btn-edit:hover { background-color: #fde68a; }
+
+        .success-message {
+            display: none; background-color: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46;
+            padding: 16px; border-radius: 8px; margin-top: 20px; text-align: center; font-weight: 500; animation: fadeIn 0.3s ease;
+        }
+
+        .table-responsive { overflow-x: auto; margin-top: 8px; border: 1px solid var(--border-color); border-radius: 12px; }
+        table { width: 100%; border-collapse: collapse; text-align: left; min-width: 600px; }
+        th { background-color: #f9fafb; color: var(--text-muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; padding: 14px 16px; border-bottom: 1px solid var(--border-color); }
+        td { padding: 16px; font-size: 14px; color: var(--text-main); border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+        
+        tfoot td {
+            background-color: #f9fafb;
+            border-top: 2px solid #d1d5db;
+            border-bottom: none;
+            font-size: 13px;
+        }
+        
+        tr:last-child td { border-bottom: none; }
+        tbody tr { transition: background-color 0.2s ease; }
+        tbody tr:hover { background-color: #f9fafb; }
+
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .empty-state { text-align: center; padding: 40px !important; color: var(--text-muted); font-size: 15px; }
+
+        /* === MODALS === */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.45); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(3px); padding: 20px; }
+        .modal-overlay.active { display: flex; animation: fadeIn 0.2s ease; }
+
+        /* Edit record modal */
+        .modal-content { background-color: #fff; padding: 32px; border-radius: 16px; width: 100%; max-width: 420px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15); }
+        .modal-content h3 { margin-bottom: 20px; font-size: 18px; }
+        .modal-actions { display: flex; gap: 12px; margin-top: 24px; }
+        .btn-cancel, .btn-save { flex: 1; height: 44px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        .btn-cancel { background-color: #f3f4f6; color: #374151; }
+        .btn-cancel:hover { background-color: #e5e7eb; }
+        .btn-save { background-color: var(--primary-color); color: #fff; }
+        .btn-save:hover { background-color: var(--primary-hover); }
+
+        /* Collaborators modal */
+        .modal-colabs { background-color: #fff; padding: 32px; border-radius: 16px; width: 100%; max-width: 780px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15); display: flex; flex-direction: column; gap: 24px; }
+        .modal-colabs h3 { font-size: 20px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; }
+        .modal-colabs h3 button { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--text-muted); line-height: 1; }
+        .modal-colabs h3 button:hover { color: var(--text-main); }
+
+        /* === MODAL COLABORADORES – estilos isolados sob #modal-colaboradores === */
+        #modal-colaboradores .colab-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+        }
+        #modal-colaboradores .colab-form-grid .full-width { grid-column: 1 / -1; }
+
+        /* Bloco de PIX – exclusivo do modal de colaboradores */
+        #modal-colaboradores .pix-container-block {
+            grid-column: 1 / -1;
+            border: 1px solid #e5e7eb;
+            background-color: #f9fafb;
+            border-radius: 10px;
+            padding: 16px 18px 12px;
+        }
+        #modal-colaboradores .pix-container-block .pix-block-title {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: var(--text-muted);
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        #modal-colaboradores .pix-inner-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 2.8fr;
+            gap: 14px;
+        }
+
+        .btn-add-colab {
+            height: 44px; padding: 0 20px; background-color: var(--primary-color); color: #fff;
+            border: none; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer;
+            transition: background-color 0.2s; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn-add-colab:hover { background-color: var(--primary-hover); }
+
+        .colabs-table-wrap { border: 1px solid var(--border-color); border-radius: 12px; overflow-x: auto; }
+        .colabs-table-wrap table { min-width: 560px; }
+
+        /* === BADGES DE STATUS (Quarentena de Dados) === */
+        .badge-status {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 4px 10px; border-radius: 20px;
+            font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+            white-space: nowrap;
+        }
+        .badge-pendente {
+            background-color: #fef9c3;
+            color: #854d0e;
+            border: 1px solid #fde047;
+        }
+        .badge-validado {
+            background-color: #dcfce7;
+            color: #166534;
+            border: 1px solid #86efac;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 650px) {
+            #paymentForm .form-grid { grid-template-columns: 1fr; }
+            .card { padding: 24px; }
+            #modal-colaboradores .colab-form-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <h1>Controle de Pagamentos</h1>
+            <p>Registre e gerencie as diárias da sua equipe de forma eficiente.</p>
+            <div class="header-actions">
+                <button class="btn-manage-colabs" onclick="openColabsModal()">
+                    👥 Gerenciar Colaboradores
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 class="section-title">Novo Lançamento</h2>
+            <form id="paymentForm">
+                <div class="form-grid" style="margin-top: 0;">
+                    <div class="form-group full-width">
+                        <label for="nome">Nome Completo</label>
+                        <select id="nome" class="form-control" required>
+                            <option value="" disabled selected>Selecione o colaborador...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="setor">Setor</label>
+                        <input type="text" id="setor" class="form-control" readonly tabindex="-1">
+                        <span class="locked-badge">🔒 automático</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="dataTrabalho">Dia Trabalhado</label>
+                        <input type="date" id="dataTrabalho" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="tipoDiaria">Tipo de Diária</label>
+                        <select id="tipoDiaria" class="form-control" required>
+                            <option value="" disabled selected>Selecione uma opção</option>
+                            <option value="Inteira">Inteira</option>
+                            <option value="Meia Diária">Meia Diária</option>
+                            <option value="Dobra">Dobra</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="valorDiaria">Valor da Diária</label>
+                        <span class="currency-symbol">R$</span>
+                        <input type="text" id="valorDiaria" class="form-control input-with-symbol" placeholder="0,00" readonly tabindex="-1">
+                        <span class="locked-badge">🔒 automático</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="pix">Chave PIX</label>
+                        <input type="text" id="pix" class="form-control" readonly tabindex="-1">
+                        <span class="locked-badge">🔒 automático</span>
+                    </div>
+                </div>
+                <button type="submit" class="btn-submit" id="submitBtn">
+                    <span>Registrar Pagamento</span>
+                </button>
+            </form>
+            <div class="success-message" id="successMessage">✅ Registro salvo com sucesso!</div>
+        </div>
+
+        <div class="card">
+            <h2 class="section-title">Resumo da Semana</h2>
+            
+            <div class="filter-bar">
+                <label for="weekFilter">Selecionar Início da Semana (Sábado):</label>
+                <input type="date" id="weekFilter" class="form-control" style="max-width: 200px;">
+                <div class="section-subtitle" id="weekPeriodText" style="margin-top: 12px; margin-bottom: 0;">Carregando período...</div>
+            </div>
+
+            <div class="table-responsive">
+                <table id="summaryTable">
+                    <thead>
+                        <tr>
+                            <th>Nome Completo</th>
+                            <th>Setor</th>
+                            <th class="text-center">Dias Trabalhados</th>
+                            <th class="text-center">Qtd Dobras</th>
+                            <th class="text-center">Qtd Meias</th>
+                            <th class="text-right">Total a Pagar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Renderizado via JS -->
+                    </tbody>
+                    <tfoot>
+                        <!-- Renderizado via JS -->
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 class="section-title">Histórico de Lançamentos</h2>
+            <div class="table-responsive">
+                <table id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Setor</th>
+                            <th>Data</th>
+                            <th>Tipo</th>
+                            <th class="text-right">Valor</th>
+                            <th>PIX</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Renderizado via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <button class="btn-export" onclick="exportExcel()">
+            📥 Exportar Fechamento (Excel)
+        </button>
+    </div>
+
+    <!-- Modal: Gerenciar Colaboradores -->
+    <div class="modal-overlay" id="colabsModal">
+        <div class="modal-colabs" id="modal-colaboradores">
+            <h3>
+                👥 Gerenciar Colaboradores
+                <button onclick="closeColabsModal()" title="Fechar">✕</button>
+            </h3>
+
+            <!-- Formulário de cadastro -->
+            <div>
+                <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;" id="colabFormTitle">Novo Colaborador</p>
+                <input type="hidden" id="colabEditId">
+                <div class="colab-form-grid">
+                    <!-- Nome: largura total -->
+                    <div class="form-group full-width">
+                        <label for="colabNome">Nome Completo *</label>
+                        <input type="text" id="colabNome" class="form-control" placeholder="Ex: João da Silva" autocomplete="off">
+                    </div>
+                    <!-- CPF / Setor / Valor Base: 3 colunas iguais -->
+                    <div class="form-group">
+                        <label for="colabCpf">CPF *</label>
+                        <input type="text" id="colabCpf" class="form-control" placeholder="000.000.000-00" maxlength="14" inputmode="numeric">
+                    </div>
+                    <div class="form-group">
+                        <label for="colabSetor">Setor de Atuação *</label>
+                        <input type="text" id="colabSetor" class="form-control" placeholder="Ex: Pedreiro, Jardinagem...">
+                    </div>
+                    <div class="form-group" style="position:relative;">
+                        <label for="colabValor">Valor Base (R$) *</label>
+                        <span class="currency-symbol">R$</span>
+                        <input type="text" id="colabValor" class="form-control input-with-symbol" placeholder="0,00" inputmode="numeric">
+                    </div>
+                    <!-- Bloco de PIX destacado -->
+                    <div class="pix-container-block">
+                        <p class="pix-block-title">🔑 Informações de Pagamento (PIX)</p>
+                        <div class="pix-inner-grid">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="colabPixTipo">Tipo de PIX *</label>
+                                <select id="colabPixTipo" class="form-control">
+                                    <option value="" disabled selected>Selecione o tipo...</option>
+                                    <option value="CPF">CPF</option>
+                                    <option value="Telefone">Telefone</option>
+                                    <option value="Email">E-mail</option>
+                                    <option value="Aleatoria">Chave Aleatória</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="colabPix">Chave PIX *</label>
+                                <input type="text" id="colabPix" class="form-control" placeholder="Selecione o tipo primeiro..." disabled autocomplete="off">
+                                <span id="colabPixHint" style="font-size:12px; color:var(--text-muted); margin-top:4px; display:block;"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex; gap:12px; margin-top:8px;">
+                    <button class="btn-add-colab" onclick="saveColab()">💾 Salvar Colaborador</button>
+                    <button class="btn-cancel" style="flex:none; padding:0 16px;" onclick="resetColabForm()">Limpar</button>
+                </div>
+            </div>
+
+            <!-- Tabela de colaboradores -->
+            <div>
+                <p style="font-size:14px; font-weight:600; color:var(--text-main); margin-bottom:10px;">Colaboradores Cadastrados</p>
+                <div class="colabs-table-wrap">
+                    <table id="colabsTable">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>CPF</th>
+                                <th>Setor</th>
+                                <th class="text-right">Valor Diária</th>
+                                <th>PIX</th>
+                                <th class="text-center">Status</th>
+                                <th class="text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Renderizado via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Ajustar Lançamento -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal-content">
+            <h3>Ajustar Registro</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+                *Para alterar Valor, Data, Tipo ou PIX, exclua o lançamento e refaça.
+            </p>
+            <input type="hidden" id="editId">
+            <div class="form-group">
+                <label for="editNome">Nome Completo</label>
+                <input type="text" id="editNome" class="form-control" required autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="editSetor">Setor</label>
+                <input type="text" id="editSetor" class="form-control" required autocomplete="off">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeEditModal()">Cancelar</button>
+                <button class="btn-save" onclick="saveEdit()">Salvar Ajuste</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =============================================
+        // UTILITÁRIOS
+        // =============================================
+        const formatCurrency = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const parseCurrencyInput = (valueStr) => parseFloat((valueStr || '').replace(/\./g, '').replace(',', '.')) || 0;
+        const pad = (n) => String(n).padStart(2, '0');
+
+        function formatDataBR(dataISO) {
+            if (!dataISO) return '';
+            const [year, month, day] = dataISO.split('-');
+            return `${day}/${month}/${year}`;
+        }
+
+        function formatCPF(value) {
+            const digits = value.replace(/\D/g, '').slice(0, 11);
+            return digits
+                .replace(/(\d{3})(\d)/, '$1.$2')
+                .replace(/(\d{3})(\d)/, '$1.$2')
+                .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+        }
+
+        // =============================================
+        // ESTADO GLOBAL
+        // =============================================
+        let records = JSON.parse(localStorage.getItem('diarias_records')) || [];
+        let colaboradores = JSON.parse(localStorage.getItem('diarias_colaboradores')) || [];
+        let currentStartIso = "";
+        let currentEndIso = "";
+
+        // =============================================
+        // FILTRO DE SEMANA
+        // =============================================
+        function findLastSaturday(date) {
+            const d = new Date(date);
+            const dayOfWeek = d.getDay();
+            const offset = dayOfWeek === 6 ? 0 : -(dayOfWeek + 1);
+            d.setDate(d.getDate() + offset);
+            return d;
+        }
+
+        function setupFilter() {
+            const weekFilter = document.getElementById('weekFilter');
+            const initialSat = findLastSaturday(new Date());
+            weekFilter.value = `${initialSat.getFullYear()}-${pad(initialSat.getMonth()+1)}-${pad(initialSat.getDate())}`;
+            updatePeriodState(initialSat);
+
+            weekFilter.addEventListener('change', (e) => {
+                if (!e.target.value) return;
+                const [y, m, d] = e.target.value.split('-');
+                const selectedDate = new Date(parseInt(y), parseInt(m)-1, parseInt(d));
+                if (selectedDate.getDay() !== 6) {
+                    const fixedSat = findLastSaturday(selectedDate);
+                    e.target.value = `${fixedSat.getFullYear()}-${pad(fixedSat.getMonth()+1)}-${pad(fixedSat.getDate())}`;
+                    updatePeriodState(fixedSat);
+                } else {
+                    updatePeriodState(selectedDate);
+                }
+            });
+        }
+
+        function updatePeriodState(satDate) {
+            const endDate = new Date(satDate);
+            endDate.setDate(satDate.getDate() + 6);
+
+            currentStartIso = `${satDate.getFullYear()}-${pad(satDate.getMonth()+1)}-${pad(satDate.getDate())}`;
+            currentEndIso = `${endDate.getFullYear()}-${pad(endDate.getMonth()+1)}-${pad(endDate.getDate())}`;
+
+            const startStr = `${pad(satDate.getDate())}/${pad(satDate.getMonth()+1)}/${satDate.getFullYear()}`;
+            const endStr = `${pad(endDate.getDate())}/${pad(endDate.getMonth()+1)}/${endDate.getFullYear()}`;
+
+            document.getElementById('weekPeriodText').innerText = `Período de Fechamento: Sábado ${startStr} até Sexta ${endStr}`;
+            updateApp();
+        }
+
+        // =============================================
+        // FORMULÁRIO DE LANÇAMENTO
+        // =============================================
+        document.addEventListener('DOMContentLoaded', () => {
+            setupFilter();
+            populateNomeSelect();
+
+            const form = document.getElementById('paymentForm');
+            const nomeSelect = document.getElementById('nome');
+            const successMessage = document.getElementById('successMessage');
+
+            document.getElementById('dataTrabalho').valueAsDate = new Date();
+
+            // Autofill ao selecionar colaborador
+            nomeSelect.addEventListener('change', function() {
+                const colabId = this.value;
+                const colab = colaboradores.find(c => c.id === colabId);
+                if (colab) {
+                    document.getElementById('setor').value = colab.setor || '';
+                    document.getElementById('pix').value = colab.pix || '';
+                    // Recalcula valor conforme o tipo já selecionado
+                    calcularValorDiaria(colab);
+                } else {
+                    document.getElementById('setor').value = '';
+                    document.getElementById('pix').value = '';
+                    document.getElementById('valorDiaria').value = '';
+                }
+            });
+
+            // Recalcular valor ao mudar o tipo de diária
+            document.getElementById('tipoDiaria').addEventListener('change', function() {
+                const colabId = document.getElementById('nome').value;
+                const colab = colaboradores.find(c => c.id === colabId);
+                calcularValorDiaria(colab || null);
+            });
+
+            // Função central de cálculo do valor proporcional
+            function calcularValorDiaria(colab) {
+                const tipo = document.getElementById('tipoDiaria').value;
+                const valorField = document.getElementById('valorDiaria');
+
+                if (!colab || !colab.valor || !tipo) {
+                    valorField.value = '';
+                    return;
+                }
+
+                const valorBase = Number(colab.valor);
+                let valorFinal = 0;
+
+                if (tipo === 'Inteira' || tipo === 'Dobra') {
+                    // Inteira: 100% do valor base
+                    // Dobra: também 100% (diária adicional inteira)
+                    valorFinal = valorBase;
+                } else if (tipo === 'Meia Diária') {
+                    // Meia Diária: 50% do valor base
+                    valorFinal = valorBase * 0.5;
+                }
+
+                valorField.value = valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                const colabId = document.getElementById('nome').value;
+                const colab = colaboradores.find(c => c.id === colabId);
+                if (!colab) {
+                    alert('Selecione um colaborador válido.');
+                    return;
+                }
+
+                const nome = colab.nome.trim();
+                const setor = colab.setor.trim();
+                const dataRaw = document.getElementById('dataTrabalho').value;
+                const tipo = document.getElementById('tipoDiaria').value;
+
+                // Calcular valor proporcional conforme o tipo de diária
+                let valor = Number(colab.valor);
+                if (tipo === 'Meia Diária') {
+                    valor = valor * 0.5;
+                }
+                // Inteira e Dobra = 100% do valor base (nenhum ajuste)
+
+                const pix = (colab.pix || '').trim();
+
+                if (!dataRaw) { alert('Informe o dia trabalhado.'); return; }
+                if (!tipo) { alert('Selecione o tipo de diária.'); return; }
+
+                const nomeLC = nome.toLowerCase();
+                const dayRecords = records.filter(r => r.nome.toLowerCase() === nomeLC && r.data === dataRaw);
+
+                const diffSector = dayRecords.find(r => (r.setor || "").toLowerCase() !== setor.toLowerCase());
+                if (diffSector) {
+                    alert(`Bloqueio: O colaborador já possui um lançamento neste dia no setor [${diffSector.setor}]. Não é permitido trabalhar em setores diferentes no mesmo dia.`);
+                    return;
+                }
+
+                if (tipo === 'Meia Diária') {
+                    const hasInteiraOrDobra = dayRecords.some(r => r.tipo === 'Inteira' || r.tipo === 'Dobra');
+                    if (hasInteiraOrDobra) {
+                        alert('Inconsistência Financeira: Não é permitido acumular Meia Diária com Diária Inteira ou Dobra para o mesmo colaborador na mesma data.');
+                        return;
+                    }
+                } else if (tipo === 'Inteira' || tipo === 'Dobra') {
+                    const hasMeia = dayRecords.some(r => r.tipo === 'Meia Diária');
+                    if (hasMeia) {
+                        alert('Inconsistência Financeira: Não é permitido acumular Meia Diária com Diária Inteira ou Dobra para o mesmo colaborador na mesma data.');
+                        return;
+                    }
+                }
+
+                if (tipo === 'Dobra') {
+                    const hasInteira = dayRecords.some(r => r.tipo === 'Inteira');
+                    if (!hasInteira) {
+                        alert('Bloqueio de Segurança: Só é permitido incluir uma Dobra se o colaborador já tiver um lançamento de Diária Inteira cadastrado no mesmo dia e setor.');
+                        return;
+                    }
+                }
+
+                const newRecord = {
+                    id: Date.now().toString(),
+                    nome, setor, data: dataRaw, tipo, valor, pix,
+                    cpf: colab.cpf || ''
+                };
+
+                records.push(newRecord);
+                localStorage.setItem('diarias_records', JSON.stringify(records));
+
+                form.reset();
+                document.getElementById('dataTrabalho').valueAsDate = new Date();
+                document.getElementById('setor').value = '';
+                document.getElementById('pix').value = '';
+                document.getElementById('valorDiaria').value = '';
+                updateApp();
+
+                successMessage.style.display = 'block';
+                setTimeout(() => { successMessage.style.display = 'none'; }, 3000);
+            });
+        });
+
+        // =============================================
+        // POPULAÇÃO DO SELECT DE COLABORADORES
+        // =============================================
+        function populateNomeSelect() {
+            const select = document.getElementById('nome');
+            const currentVal = select.value;
+            select.innerHTML = '<option value="" disabled selected>Selecione o colaborador...</option>';
+            // Quarentena de Dados: exibe APENAS colaboradores com status === 'validado'
+            const validados = colaboradores.filter(c => c.status === 'validado');
+            const sorted = [...validados].sort((a, b) => a.nome.localeCompare(b.nome));
+            sorted.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.nome;
+                select.appendChild(opt);
+            });
+            if (currentVal) select.value = currentVal;
+        }
+
+        // =============================================
+        // UPDATE GERAL
+        // =============================================
+        function getFilteredRecords() {
+            return records.filter(r => r.data >= currentStartIso && r.data <= currentEndIso);
+        }
+
+        function updateApp() {
+            const filteredRecords = getFilteredRecords();
+            renderSummaryTable(filteredRecords);
+            renderHistoryTable(filteredRecords);
+        }
+
+        // =============================================
+        // TABELA RESUMO DA SEMANA
+        // =============================================
+        function renderSummaryTable(filteredRecords) {
+            const tbody = document.querySelector('#summaryTable tbody');
+            const tfoot = document.querySelector('#summaryTable tfoot');
+            tbody.innerHTML = '';
+            tfoot.innerHTML = '';
+
+            if (filteredRecords.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum registro encontrado para este período.</td></tr>';
+                return;
+            }
+
+            const summaryMap = {};
+            filteredRecords.forEach(r => {
+                if (!summaryMap[r.nome]) {
+                    summaryMap[r.nome] = { uniqueDays: new Set(), dobras: 0, meias: 0, total: 0 };
+                }
+                summaryMap[r.nome].uniqueDays.add(r.data);
+                if (r.tipo === 'Dobra') summaryMap[r.nome].dobras += 1;
+                if (r.tipo === 'Meia Diária') summaryMap[r.nome].meias += 1;
+                summaryMap[r.nome].total += r.valor;
+            });
+
+            const sortedNames = Object.keys(summaryMap).sort((a, b) => a.localeCompare(b));
+
+            sortedNames.forEach(nome => {
+                const data = summaryMap[nome];
+
+                // Cruzar com a base oficial de colaboradores para obter o Setor
+                const nomeLC = nome.toLowerCase();
+                const colab = colaboradores.find(c => c.nome.toLowerCase() === nomeLC);
+                const setor = colab ? (colab.setor || '-') : (filteredRecords.find(r => r.nome.toLowerCase() === nomeLC)?.setor || '-');
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-weight: 500;">${nome}</td>
+                    <td style="color: var(--text-muted); font-size: 13px;">${setor}</td>
+                    <td class="text-center">${data.uniqueDays.size}</td>
+                    <td class="text-center">${data.dobras}</td>
+                    <td class="text-center">${data.meias}</td>
+                    <td class="text-right" style="font-weight: 600; color: var(--success-color);">${formatCurrency(data.total)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            const globalColaboradores = sortedNames.length;
+            const globalUniqueDays = new Set(filteredRecords.map(r => r.data)).size;
+            const globalDobras = filteredRecords.filter(r => r.tipo === 'Dobra').length;
+            const globalMeias = filteredRecords.filter(r => r.tipo === 'Meia Diária').length;
+            const globalTotal = filteredRecords.reduce((acc, r) => acc + r.valor, 0);
+
+            tfoot.innerHTML = `
+                <tr>
+                    <td style="font-weight: 700; color: var(--text-main);">Total: ${globalColaboradores} Colaboradores</td>
+                    <td></td>
+                    <td class="text-center" style="font-weight: 700; color: var(--text-main);">${globalUniqueDays} Dias Ativos</td>
+                    <td class="text-center" style="font-weight: 700; color: var(--text-main);">${globalDobras}</td>
+                    <td class="text-center" style="font-weight: 700; color: var(--text-main);">${globalMeias}</td>
+                    <td class="text-right" style="font-weight: 700; color: var(--primary-color); font-size: 15px;">${formatCurrency(globalTotal)}</td>
+                </tr>
+            `;
+        }
+
+
+        // =============================================
+        // TABELA HISTÓRICO
+        // =============================================
+        function renderHistoryTable(filteredRecords) {
+            const tbody = document.querySelector('#historyTable tbody');
+            tbody.innerHTML = '';
+
+            if (filteredRecords.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum lançamento no histórico para este período.</td></tr>';
+                return;
+            }
+
+            const typePriority = { "Inteira": 1, "Dobra": 2, "Meia Diária": 3 };
+            
+            const sortedRecords = [...filteredRecords].sort((a, b) => {
+                if (a.data > b.data) return -1;
+                if (a.data < b.data) return 1;
+                const pA = typePriority[a.tipo] || 99;
+                const pB = typePriority[b.tipo] || 99;
+                if (pA !== pB) return pA - pB;
+                const setA = (a.setor || "").toLowerCase();
+                const setB = (b.setor || "").toLowerCase();
+                if (setA < setB) return -1;
+                if (setA > setB) return 1;
+                const nomA = (a.nome || "").toLowerCase();
+                const nomB = (b.nome || "").toLowerCase();
+                if (nomA < nomB) return -1;
+                if (nomA > nomB) return 1;
+                return 0;
+            });
+
+            sortedRecords.forEach(r => {
+                const tr = document.createElement('tr');
+                const safeNome = (r.nome || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const safeSetor = (r.setor || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const safeData = formatDataBR(r.data);
+
+                let tipoBadgeColor = "var(--primary-color)";
+                if(r.tipo === 'Dobra') tipoBadgeColor = "var(--warning-color)";
+                if(r.tipo === 'Meia Diária') tipoBadgeColor = "#8b5cf6";
+
+                tr.innerHTML = `
+                    <td style="font-weight: 500;">${r.nome}</td>
+                    <td><span style="color: var(--text-muted); font-size: 13px;">${safeSetor}</span></td>
+                    <td>${safeData}</td>
+                    <td><span style="background: #eef2ff; color: ${tipoBadgeColor}; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">${r.tipo}</span></td>
+                    <td class="text-right" style="font-weight: 500;">${formatCurrency(r.valor)}</td>
+                    <td style="color: var(--text-muted); font-family: monospace; font-size: 13px;">${r.pix}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-edit" onclick="openEditModal('${r.id}')" title="Ajustar Nome ou Setor">Ajustar</button>
+                            <button class="btn-delete" onclick="deleteRecord('${r.id}', '${safeNome}', '${safeData}')" title="Excluir Lançamento">Excluir</button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // =============================================
+        // AÇÕES DE LANÇAMENTO
+        // =============================================
+        window.deleteRecord = function(id, nome, dataStr) {
+            if (confirm(`Tem certeza que deseja apagar o registro de ${nome} do dia ${dataStr}?`)) {
+                records = records.filter(r => r.id !== id);
+                localStorage.setItem('diarias_records', JSON.stringify(records));
+                updateApp();
+            }
+        }
+
+        window.openEditModal = function(id) {
+            const record = records.find(r => r.id === id);
+            if (!record) return;
+            document.getElementById('editId').value = record.id;
+            document.getElementById('editNome').value = record.nome;
+            document.getElementById('editSetor').value = record.setor || '';
+            document.getElementById('editModal').classList.add('active');
+        }
+
+        window.closeEditModal = function() {
+            document.getElementById('editModal').classList.remove('active');
+        }
+
+        window.saveEdit = function() {
+            const id = document.getElementById('editId').value;
+            const novoNome = document.getElementById('editNome').value.trim();
+            const novoSetor = document.getElementById('editSetor').value.trim();
+            if (!novoNome || !novoSetor) { alert("Por favor, preencha o Nome e o Setor."); return; }
+            records = records.map(r => r.id === id ? { ...r, nome: novoNome, setor: novoSetor } : r);
+            localStorage.setItem('diarias_records', JSON.stringify(records));
+            updateApp();
+            closeEditModal();
+        }
+
+        // =============================================
+        // MODAL DE COLABORADORES
+        // =============================================
+        window.openColabsModal = function() {
+            renderColabsTable();
+            document.getElementById('colabsModal').classList.add('active');
+        }
+
+        window.closeColabsModal = function() {
+            document.getElementById('colabsModal').classList.remove('active');
+            resetColabForm();
+        }
+
+        // Fechar ao clicar fora
+        document.getElementById('colabsModal').addEventListener('click', function(e) {
+            if (e.target === this) closeColabsModal();
+        });
+        document.getElementById('editModal').addEventListener('click', function(e) {
+            if (e.target === this) closeEditModal();
+        });
+
+        window.resetColabForm = function() {
+            document.getElementById('colabEditId').value = '';
+            document.getElementById('colabNome').value = '';
+            document.getElementById('colabCpf').value = '';
+            document.getElementById('colabSetor').value = '';
+            document.getElementById('colabValor').value = '';
+            document.getElementById('colabPixTipo').value = '';
+            document.getElementById('colabPix').value = '';
+            document.getElementById('colabPix').disabled = true;
+            document.getElementById('colabPix').placeholder = 'Selecione o tipo primeiro...';
+            document.getElementById('colabPix').inputMode = '';
+            document.getElementById('colabPixHint').textContent = '';
+            document.getElementById('colabFormTitle').textContent = 'Novo Colaborador';
+        }
+
+        // CPF Mask (campo de cadastro do colaborador)
+        document.getElementById('colabCpf').addEventListener('input', function(e) {
+            e.target.value = formatCPF(e.target.value);
+        });
+
+        // =============================================
+        // PIX: TIPO → MÁSCARA E VALIDAÇÃO
+        // =============================================
+        (function setupPixField() {
+            const tipoSelect = document.getElementById('colabPixTipo');
+            const pixInput   = document.getElementById('colabPix');
+            const pixHint    = document.getElementById('colabPixHint');
+
+            const hints = {
+                CPF:       'Somente números — formato 000.000.000-00 (11 dígitos)',
+                Telefone:  'Somente números com DDD — formato (00) 00000-0000 (11 dígitos)',
+                Email:     'Ex: nome@dominio.com',
+                Aleatoria: '36 caracteres (cole a chave gerada pelo banco)'
+            };
+
+            function applyPixMask(tipo, raw) {
+                if (tipo === 'CPF') {
+                    const d = raw.replace(/\D/g, '').slice(0, 11);
+                    return d.replace(/(\d{3})(\d)/, '$1.$2')
+                            .replace(/(\d{3})(\d)/, '$1.$2')
+                            .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+                }
+                if (tipo === 'Telefone') {
+                    const d = raw.replace(/\D/g, '').slice(0, 11);
+                    return d.replace(/(\d{2})(\d)/, '($1) $2')
+                            .replace(/(\d{5})(\d{1,4})$/, '$1-$2');
+                }
+                return raw; // Email e Aleatoria: sem máscara automática
+            }
+
+            tipoSelect.addEventListener('change', function() {
+                const tipo = this.value;
+                pixInput.value = '';
+                pixInput.disabled = false;
+                pixInput.focus();
+                pixHint.textContent = hints[tipo] || '';
+
+                if (tipo === 'CPF' || tipo === 'Telefone') {
+                    pixInput.inputMode = 'numeric';
+                    pixInput.placeholder = tipo === 'CPF' ? '000.000.000-00' : '(00) 00000-0000';
+                } else if (tipo === 'Email') {
+                    pixInput.inputMode = 'email';
+                    pixInput.placeholder = 'nome@dominio.com';
+                } else {
+                    pixInput.inputMode = 'text';
+                    pixInput.placeholder = 'Cole a chave aleatória aqui';
+                }
+            });
+
+            // Bloqueia letras em CPF/Telefone e aplica máscara
+            pixInput.addEventListener('keypress', function(e) {
+                const tipo = tipoSelect.value;
+                if ((tipo === 'CPF' || tipo === 'Telefone') && !/[0-9]/.test(e.key)) {
+                    e.preventDefault();
+                }
+            });
+
+            pixInput.addEventListener('input', function(e) {
+                const tipo = tipoSelect.value;
+                if (tipo === 'CPF' || tipo === 'Telefone') {
+                    // Preserve cursor offset roughly by reapplying mask
+                    e.target.value = applyPixMask(tipo, e.target.value);
+                }
+            });
+
+            // Trim em Aleatória ao colar ou sair do campo
+            pixInput.addEventListener('paste', function() {
+                if (tipoSelect.value === 'Aleatoria') {
+                    setTimeout(() => { pixInput.value = pixInput.value.trim(); }, 0);
+                }
+            });
+
+            pixInput.addEventListener('blur', function() {
+                if (tipoSelect.value === 'Aleatoria') {
+                    pixInput.value = pixInput.value.trim();
+                }
+            });
+        })();
+
+        // Valor mask no modal de colaboradores
+        document.getElementById('colabValor').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value === '') { e.target.value = ''; return; }
+            value = parseInt(value, 10) / 100;
+            e.target.value = value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        });
+
+        window.saveColab = function() {
+            const editId   = document.getElementById('colabEditId').value;
+            const nome     = document.getElementById('colabNome').value.trim();
+            const cpf      = document.getElementById('colabCpf').value.trim();
+            const setor    = document.getElementById('colabSetor').value.trim();
+            const valorStr = document.getElementById('colabValor').value;
+            const pixTipo  = document.getElementById('colabPixTipo').value;
+            const pixRaw   = document.getElementById('colabPix').value.trim();
+
+            if (!nome || !cpf || !setor || !valorStr || !pixTipo || !pixRaw) {
+                alert('Por favor, preencha todos os campos obrigatórios do colaborador.');
+                return;
+            }
+
+            // Validação CPF do cadastro
+            const cpfDigits = cpf.replace(/\D/g, '');
+            if (cpfDigits.length !== 11) {
+                alert('CPF inválido. Informe os 11 dígitos.');
+                return;
+            }
+
+            // Validação da Chave PIX por tipo
+            if (pixTipo === 'CPF') {
+                const d = pixRaw.replace(/\D/g, '');
+                if (d.length !== 11) {
+                    alert('O CPF digitado está incompleto. Faltam números. São necessários exatamente 11 dígitos.');
+                    return;
+                }
+            } else if (pixTipo === 'Telefone') {
+                const d = pixRaw.replace(/\D/g, '');
+                if (d.length !== 11) {
+                    alert('O número de Telefone está incompleto. Informe DDD + 9 dígitos (total 11 números).');
+                    return;
+                }
+            } else if (pixTipo === 'Email') {
+                const parts = pixRaw.split('@');
+                if (parts.length !== 2 || !parts[1].includes('.')) {
+                    alert('O e-mail informado é inválido. Certifique-se de incluir "@" e um domínio com ponto (ex: nome@dominio.com).');
+                    return;
+                }
+            } else if (pixTipo === 'Aleatoria') {
+                if (pixRaw.length !== 36) {
+                    alert(`A Chave Aleatória deve ter exatamente 36 caracteres. A chave informada tem ${pixRaw.length}.`);
+                    return;
+                }
+            }
+
+            const valor = parseCurrencyInput(valorStr);
+            // Armazenar chave PIX sem máscara visual (raw digits para CPF/Telefone) para uso no XLSX
+            const pixSanitized = (pixTipo === 'CPF' || pixTipo === 'Telefone')
+                ? pixRaw  // mantém formatado para leitura humana
+                : pixRaw;
+
+            if (editId) {
+                // Quarentena de Dados: ao salvar edição com setor preenchido → valida automaticamente
+                colaboradores = colaboradores.map(c => {
+                    if (c.id !== editId) return c;
+                    const novoStatus = setor ? 'validado' : (c.status || 'pendente');
+                    return { ...c, nome, cpf, setor, valor, pix: pixSanitized, pixTipo, status: novoStatus };
+                });
+            } else {
+                // Verificar CPF duplicado
+                const cpfExiste = colaboradores.find(c => c.cpf.replace(/\D/g,'') === cpfDigits);
+                if (cpfExiste) {
+                    alert(`CPF já cadastrado para o colaborador: ${cpfExiste.nome}`);
+                    return;
+                }
+                // Novo colaborador: validado se tiver setor, pendente caso contrário
+                const novoStatus = setor ? 'validado' : 'pendente';
+                colaboradores.push({
+                    id: Date.now().toString(),
+                    nome, cpf, setor, valor,
+                    pix: pixSanitized,
+                    pixTipo,
+                    status: novoStatus
+                });
+            }
+
+            localStorage.setItem('diarias_colaboradores', JSON.stringify(colaboradores));
+            resetColabForm();
+            renderColabsTable();
+            populateNomeSelect();
+        }
+
+        window.editColab = function(id) {
+            const c = colaboradores.find(c => c.id === id);
+            if (!c) return;
+            document.getElementById('colabEditId').value = c.id;
+            document.getElementById('colabNome').value = c.nome;
+            document.getElementById('colabCpf').value = c.cpf;
+            document.getElementById('colabSetor').value = c.setor;
+            document.getElementById('colabValor').value = Number(c.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            // Restaurar tipo e chave PIX
+            const tipoSelect = document.getElementById('colabPixTipo');
+            const pixInput   = document.getElementById('colabPix');
+            const pixHint    = document.getElementById('colabPixHint');
+            const tipoHints  = {
+                CPF:       'Somente números — formato 000.000.000-00 (11 dígitos)',
+                Telefone:  'Somente números com DDD — formato (00) 00000-0000 (11 dígitos)',
+                Email:     'Ex: nome@dominio.com',
+                Aleatoria: '36 caracteres (cole a chave gerada pelo banco)'
+            };
+            tipoSelect.value    = c.pixTipo || '';
+            pixInput.value      = c.pix || '';
+            pixInput.disabled   = false;
+            pixHint.textContent = tipoHints[c.pixTipo] || '';
+
+            document.getElementById('colabFormTitle').textContent = `Editando: ${c.nome}`;
+            document.getElementById('colabNome').focus();
+        }
+
+        window.deleteColab = function(id) {
+            const c = colaboradores.find(c => c.id === id);
+            if (!c) return;
+            if (confirm(`Excluir o colaborador "${c.nome}" da base de dados?\n\nOs lançamentos já registrados não serão afetados.`)) {
+                colaboradores = colaboradores.filter(c => c.id !== id);
+                localStorage.setItem('diarias_colaboradores', JSON.stringify(colaboradores));
+                renderColabsTable();
+                populateNomeSelect();
+            }
+        }
+
+        function renderColabsTable() {
+            const tbody = document.querySelector('#colabsTable tbody');
+            tbody.innerHTML = '';
+            if (colaboradores.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum colaborador cadastrado.</td></tr>';
+                return;
+            }
+            // Quarentena de Dados: pendentes primeiro, depois validados (ambos em ordem alfabética)
+            const sorted = [...colaboradores].sort((a, b) => {
+                const sA = a.status || 'pendente';
+                const sB = b.status || 'pendente';
+                if (sA === sB) return a.nome.localeCompare(b.nome);
+                return sA === 'pendente' ? -1 : 1; // pendentes sobem
+            });
+            const tipoLabels = { CPF: 'CPF', Telefone: 'Tel', Email: 'E-mail', Aleatoria: 'Aleat.' };
+            sorted.forEach(c => {
+                const status = c.status || 'pendente';
+                const badgeClass = status === 'validado' ? 'badge-validado' : 'badge-pendente';
+                const badgeIcon  = status === 'validado' ? '✔' : '⏳';
+                const badgeLabel = status === 'validado' ? 'Validado' : 'Pendente';
+                const tr = document.createElement('tr');
+                const tipoLabel = tipoLabels[c.pixTipo] || '';
+                const pixDisplay = tipoLabel ? `<span style="font-size:11px;background:#eef2ff;color:var(--primary-color);padding:2px 6px;border-radius:4px;font-weight:600;margin-right:4px;">${tipoLabel}</span>${c.pix}` : c.pix;
+                const setorDisplay = c.setor
+                    ? `<span style="color:var(--text-muted); font-size:13px;">${c.setor}</span>`
+                    : `<span style="color:#f59e0b; font-size:12px; font-style:italic;">— não informado —</span>`;
+                tr.innerHTML = `
+                    <td style="font-weight:500;">${c.nome}</td>
+                    <td style="font-family:monospace; font-size:13px;">${c.cpf}</td>
+                    <td>${setorDisplay}</td>
+                    <td class="text-right">${formatCurrency(Number(c.valor))}</td>
+                    <td style="font-family:monospace; font-size:13px; color:var(--text-muted);">${pixDisplay}</td>
+                    <td class="text-center"><span class="badge-status ${badgeClass}">${badgeIcon} ${badgeLabel}</span></td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-edit" onclick="editColab('${c.id}')">Editar</button>
+                            <button class="btn-delete" onclick="deleteColab('${c.id}')">Excluir</button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // =============================================
+        // EXPORTAÇÃO XLSX
+        // =============================================
+        window.exportExcel = function() {
+            const filteredRecords = getFilteredRecords();
+            
+            if (filteredRecords.length === 0) {
+                alert("Não há dados no período selecionado para exportar.");
+                return;
+            }
+
+            const summaryMap = {};
+            filteredRecords.forEach(r => {
+                const nomeTrimmed = (r.nome || "").trim().replace(/\r?\n|\r/g, " ");
+                if (!summaryMap[nomeTrimmed]) {
+                    summaryMap[nomeTrimmed] = {
+                        uniqueDays: new Set(),
+                        total: 0,
+                        pix: (r.pix || "").trim().replace(/\r?\n|\r/g, " "),
+                        cpf: (r.cpf || "").trim(),
+                        datas: []
+                    };
+                }
+                summaryMap[nomeTrimmed].uniqueDays.add(r.data);
+                summaryMap[nomeTrimmed].total += r.valor;
+                summaryMap[nomeTrimmed].datas.push(r.data);
+                if (r.pix) summaryMap[nomeTrimmed].pix = r.pix.trim().replace(/\r?\n|\r/g, " ");
+                // Atualiza CPF se disponível (busca também da base de colaboradores)
+                if (!summaryMap[nomeTrimmed].cpf || summaryMap[nomeTrimmed].cpf === '') {
+                    const colab = colaboradores.find(c => c.nome.trim().toLowerCase() === nomeTrimmed.toLowerCase());
+                    if (colab) summaryMap[nomeTrimmed].cpf = (colab.cpf || '').trim();
+                }
+            });
+
+            // Garante CPF da base de colaboradores mesmo que não esteja no registro
+            Object.keys(summaryMap).forEach(nome => {
+                if (!summaryMap[nome].cpf) {
+                    const colab = colaboradores.find(c => c.nome.trim().toLowerCase() === nome.toLowerCase());
+                    if (colab) summaryMap[nome].cpf = (colab.cpf || '').trim();
+                }
+            });
+
+            const headers = [
+                "Data de Competência",
+                "Data de Vencimento",
+                "Data de Pagamento",
+                "Valor",
+                "Categoria",
+                "Descrição",
+                "Cliente/Fornecedor",
+                "CNPJ/CPF Cliente/Fornecedor",
+                "Centro de Custo",
+                "Observações"
+            ];
+
+            const rows = [headers];
+
+            const formatDataBRString = (dataISO) => {
+                if (!dataISO) return '';
+                const [year, month, day] = dataISO.split('-');
+                return `${day}/${month}/${year}`;
+            };
+
+            const vencDateStr = formatDataBRString(currentEndIso);
+
+            Object.keys(summaryMap).forEach(nome => {
+                const data = summaryMap[nome];
+                const compDateIso = [...data.datas].sort()[0];
+                const compDateStr = formatDataBRString(compDateIso);
+                const valorNegativo = -data.total;
+                const categoria = "Serviços Prestados por PF".trim().replace(/\r?\n|\r/g, " ");
+                const descricao = `${data.uniqueDays.size} dias trabalhados`.trim().replace(/\r?\n|\r/g, " ");
+                const fornecedor = nome;
+                const cnpjCpf = (data.cpf || '').trim().replace(/\r?\n|\r/g, " ");
+                const centroCusto = "Custo Variável - Folha - Vila de Cava".trim().replace(/\r?\n|\r/g, " ");
+                // Buscar tipo de PIX da base de colaboradores para o label na observação
+                const colabRef = colaboradores.find(c => c.nome.trim().toLowerCase() === nome.toLowerCase());
+                const pixTipoLabel = colabRef && colabRef.pixTipo
+                    ? { CPF: 'CPF', Telefone: 'Telefone', Email: 'E-mail', Aleatoria: 'Chave Aleatória' }[colabRef.pixTipo] || colabRef.pixTipo
+                    : 'PIX';
+                const observacoes = `PIX: ${pixTipoLabel} - ${data.pix}`.trim().replace(/\r?\n|\r/g, " ");
+
+                rows.push([
+                    compDateStr,
+                    vencDateStr,
+                    "",
+                    valorNegativo,
+                    categoria,
+                    descricao,
+                    fornecedor,
+                    cnpjCpf,
+                    centroCusto,
+                    observacoes
+                ]);
+            });
+
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(rows);
+
+            // Forçar datas como texto (string) para não quebrar no ERP
+            for (let i = 1; i < rows.length; i++) {
+                const cellA = ws[XLSX.utils.encode_cell({r: i, c: 0})];
+                if (cellA) cellA.t = 's';
+                const cellB = ws[XLSX.utils.encode_cell({r: i, c: 1})];
+                if (cellB) cellB.t = 's';
+                // CPF também como string para manter zeros à esquerda
+                const cellH = ws[XLSX.utils.encode_cell({r: i, c: 7})];
+                if (cellH) cellH.t = 's';
+            }
+
+            XLSX.utils.book_append_sheet(wb, ws, "Dados");
+
+            const startStrFile = formatDataBRString(currentStartIso).replace(/\//g, '-');
+            const endStrFile = formatDataBRString(currentEndIso).replace(/\//g, '-');
+            const filename = `Exportacao_CA_Semana_${startStrFile}_${endStrFile}.xlsx`;
+
+            XLSX.writeFile(wb, filename);
+        }
+    </script>
+</body>
+</html>
