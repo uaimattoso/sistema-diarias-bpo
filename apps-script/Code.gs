@@ -8,7 +8,8 @@
 const DIARIAS = Object.freeze({
   spreadsheetId: '133Nv2tzOZOzMSgQdF_MCE5X3J6BPb62C9YbmjTOds9Q',
   sheetName: 'Página1',
-  interfaceUrl: 'https://raw.githubusercontent.com/uaimattoso/sistema-diarias-bpo/main/index.html'
+  interfaceUrl: 'https://raw.githubusercontent.com/uaimattoso/sistema-diarias-bpo/main/index.html',
+  firebaseApiKey: 'AIzaSyBjK_9axgVosw0ksePw85uEoB-5ma1IlLs'
 });
 
 function doGet() {
@@ -21,7 +22,8 @@ function doGet() {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
 }
 
-function listarColaboradoresDaPlanilha() {
+function listarColaboradoresDaPlanilha(idToken) {
+  validarTokenFirebase_(idToken);
   const aba = SpreadsheetApp.openById(DIARIAS.spreadsheetId).getSheetByName(DIARIAS.sheetName);
   if (!aba) throw new Error('A aba "' + DIARIAS.sheetName + '" não foi encontrada.');
 
@@ -38,6 +40,31 @@ function listarColaboradoresDaPlanilha() {
   });
 
   return Object.keys(porCpf).sort().map(function (cpf) { return porCpf[cpf]; });
+}
+
+function validarTokenFirebase_(idToken) {
+  if (!idToken) throw new Error('Acesso negado: autenticação obrigatória.');
+
+  const resposta = UrlFetchApp.fetch(
+    'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + encodeURIComponent(DIARIAS.firebaseApiKey),
+    {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({ idToken: idToken }),
+      muteHttpExceptions: true
+    }
+  );
+
+  if (resposta.getResponseCode() !== 200) {
+    throw new Error('Acesso negado: sessão inválida ou expirada.');
+  }
+
+  const dados = JSON.parse(resposta.getContentText() || '{}');
+  const usuario = dados.users && dados.users[0];
+  if (!usuario || !usuario.email) {
+    throw new Error('Acesso negado: usuário não identificado.');
+  }
+  return usuario;
 }
 
 function somenteDigitos_(valor) {

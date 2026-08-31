@@ -7,6 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root {
@@ -35,6 +37,35 @@
             flex-direction: column;
             align-items: center;
         }
+
+        body.auth-pending > .container,
+        body.auth-pending > .modal-overlay { display: none !important; }
+
+        .login-overlay {
+            position: fixed; inset: 0; z-index: 3000;
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px; background: linear-gradient(135deg, #eef2ff, #f8fafc);
+        }
+        .login-overlay.hidden { display: none; }
+        .login-card {
+            width: 100%; max-width: 410px; background: #fff;
+            border-radius: 18px; padding: 34px;
+            box-shadow: 0 20px 45px rgba(15, 23, 42, 0.14);
+        }
+        .login-card h1 { font-size: 24px; margin-bottom: 8px; }
+        .login-card > p { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+        .login-actions { display: flex; flex-direction: column; gap: 10px; }
+        .login-message { min-height: 20px; margin-top: 14px; font-size: 13px; color: var(--error-color); }
+        .login-message.success { color: var(--success-color); }
+        .btn-link {
+            border: none; background: transparent; color: var(--primary-color);
+            font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 6px;
+        }
+        .session-bar {
+            display: none; align-items: center; justify-content: center; gap: 12px;
+            margin-top: 12px; font-size: 12px; color: var(--text-muted);
+        }
+        .session-bar.visible { display: flex; }
 
         .container { width: 100%; max-width: 900px; }
         .header { text-align: center; margin-bottom: 32px; }
@@ -308,7 +339,29 @@
         }
     </style>
 </head>
-<body>
+<body class="auth-pending">
+
+    <div class="login-overlay" id="loginOverlay">
+        <div class="login-card">
+            <h1>Controle de Pagamentos</h1>
+            <p>Acesso restrito à equipe autorizada.</p>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail">E-mail</label>
+                    <input type="email" id="loginEmail" class="form-control" autocomplete="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Senha</label>
+                    <input type="password" id="loginPassword" class="form-control" autocomplete="current-password" required>
+                </div>
+                <div class="login-actions">
+                    <button type="submit" class="btn-submit" id="loginBtn">Entrar</button>
+                    <button type="button" class="btn-link" id="resetPasswordBtn">Esqueci minha senha</button>
+                </div>
+                <div class="login-message" id="loginMessage" aria-live="polite"></div>
+            </form>
+        </div>
+    </div>
 
     <div class="container">
         <div class="header">
@@ -318,6 +371,10 @@
                 <button class="btn-manage-colabs" onclick="openColabsModal()">
                     👥 Gerenciar Colaboradores
                 </button>
+            </div>
+            <div class="session-bar" id="sessionBar">
+                <span id="sessionEmail"></span>
+                <button type="button" class="btn-link" id="logoutBtn">Sair</button>
             </div>
         </div>
 
@@ -544,6 +601,96 @@
 
     <script>
         // =============================================
+        // ACESSO SEGURO COM FIREBASE
+        // =============================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBjK_9axgVosw0ksePw85uEoB-5ma1IlLs",
+            authDomain: "sistema-diarias-bpo-8b099.firebaseapp.com",
+            projectId: "sistema-diarias-bpo-8b099",
+            storageBucket: "sistema-diarias-bpo-8b099.firebasestorage.app",
+            messagingSenderId: "939419863216",
+            appId: "1:939419863216:web:c9574570bccc23f7cf9375"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const firebaseAuth = firebase.auth();
+        let primeiraSincronizacaoAutenticada = false;
+
+        function mensagemLogin(texto, sucesso = false) {
+            const el = document.getElementById('loginMessage');
+            el.textContent = texto;
+            el.classList.toggle('success', sucesso);
+        }
+
+        function traduzirErroLogin(codigo) {
+            const mensagens = {
+                'auth/invalid-credential': 'E-mail ou senha incorretos.',
+                'auth/invalid-email': 'Informe um e-mail válido.',
+                'auth/missing-password': 'Informe sua senha.',
+                'auth/too-many-requests': 'Muitas tentativas. Aguarde alguns minutos e tente novamente.',
+                'auth/user-disabled': 'Este usuário está desativado.'
+            };
+            return mensagens[codigo] || 'Não foi possível entrar. Confira os dados e tente novamente.';
+        }
+
+        window.obterTokenFirebase = async function() {
+            const usuario = firebaseAuth.currentUser;
+            if (!usuario) throw new Error('Sessão expirada. Entre novamente.');
+            return usuario.getIdToken();
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const loginForm = document.getElementById('loginForm');
+            const loginBtn = document.getElementById('loginBtn');
+
+            loginForm.addEventListener('submit', async event => {
+                event.preventDefault();
+                loginBtn.disabled = true;
+                mensagemLogin('Entrando...');
+                try {
+                    await firebaseAuth.signInWithEmailAndPassword(
+                        document.getElementById('loginEmail').value.trim(),
+                        document.getElementById('loginPassword').value
+                    );
+                    loginForm.reset();
+                } catch (erro) {
+                    mensagemLogin(traduzirErroLogin(erro.code));
+                } finally {
+                    loginBtn.disabled = false;
+                }
+            });
+
+            document.getElementById('resetPasswordBtn').addEventListener('click', async () => {
+                const email = document.getElementById('loginEmail').value.trim();
+                if (!email) {
+                    mensagemLogin('Informe seu e-mail para receber a recuperação de senha.');
+                    return;
+                }
+                try {
+                    await firebaseAuth.sendPasswordResetEmail(email);
+                    mensagemLogin('E-mail de recuperação enviado.', true);
+                } catch (erro) {
+                    mensagemLogin(traduzirErroLogin(erro.code));
+                }
+            });
+
+            document.getElementById('logoutBtn').addEventListener('click', () => firebaseAuth.signOut());
+
+            firebaseAuth.onAuthStateChanged(async usuario => {
+                const autenticado = Boolean(usuario);
+                document.body.classList.toggle('auth-pending', !autenticado);
+                document.getElementById('loginOverlay').classList.toggle('hidden', autenticado);
+                document.getElementById('sessionBar').classList.toggle('visible', autenticado);
+                document.getElementById('sessionEmail').textContent = autenticado ? usuario.email : '';
+
+                if (autenticado && !primeiraSincronizacaoAutenticada) {
+                    primeiraSincronizacaoAutenticada = true;
+                    await sincronizarColaboradoresSheets(false);
+                }
+                if (!autenticado) primeiraSincronizacaoAutenticada = false;
+            });
+        });
+
+        // =============================================
         // UTILITÁRIOS
         // =============================================
         const formatCurrency = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -583,7 +730,7 @@
         }
 
         function carregarColaboradoresProtegidos() {
-            return new Promise((resolve, reject) => {
+            return obterTokenFirebase().then(token => new Promise((resolve, reject) => {
                 if (!window.google?.script?.run) {
                     reject(new Error('Abra o sistema pelo endereço protegido do Apps Script.'));
                     return;
@@ -591,8 +738,8 @@
                 google.script.run
                     .withSuccessHandler(resolve)
                     .withFailureHandler(erro => reject(new Error(erro?.message || String(erro))))
-                    .listarColaboradoresDaPlanilha();
-            });
+                    .listarColaboradoresDaPlanilha(token);
+            }));
         }
 
         window.sincronizarColaboradoresSheets = async function(exibirResultado = false) {
@@ -710,7 +857,6 @@
         document.addEventListener('DOMContentLoaded', () => {
             setupFilter();
             populateNomeSelect();
-            sincronizarColaboradoresSheets(false);
 
             const form = document.getElementById('paymentForm');
             const nomeSelect = document.getElementById('nome');
