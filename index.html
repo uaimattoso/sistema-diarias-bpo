@@ -488,7 +488,15 @@
 
             <!-- Tabela de colaboradores -->
             <div>
-                <p style="font-size:14px; font-weight:600; color:var(--text-main); margin-bottom:10px;">Colaboradores Cadastrados</p>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; flex-wrap:wrap;">
+                    <div>
+                        <p style="font-size:14px; font-weight:600; color:var(--text-main); margin:0;">Colaboradores Cadastrados</p>
+                        <small id="sheetsSyncStatus" style="color:var(--text-muted);">Sincronização com Google Sheets habilitada.</small>
+                    </div>
+                    <button id="btnSyncSheets" class="btn-add-colab" style="flex:none; padding:9px 14px;" onclick="sincronizarColaboradoresSheets(true)">
+                        🔄 Atualizar pelo Sheets
+                    </button>
+                </div>
                 <div class="colabs-table-wrap">
                     <table id="colabsTable">
                         <thead>
@@ -564,6 +572,93 @@
         let currentStartIso = "";
         let currentEndIso = "";
 
+        function identificarTipoPix(pix, cpf) {
+            const valor = (pix || '').trim();
+            const digitos = valor.replace(/\D/g, '');
+            if (valor.includes('@')) return 'Email';
+            if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(valor)) return 'Aleatoria';
+            if (digitos.length === 11 && digitos === (cpf || '').replace(/\D/g, '')) return 'CPF';
+            if (digitos.length === 11) return 'Telefone';
+            return 'Aleatoria';
+        }
+
+        function carregarColaboradoresProtegidos() {
+            return new Promise((resolve, reject) => {
+                if (!window.google?.script?.run) {
+                    reject(new Error('Abra o sistema pelo endereço protegido do Apps Script.'));
+                    return;
+                }
+                google.script.run
+                    .withSuccessHandler(resolve)
+                    .withFailureHandler(erro => reject(new Error(erro?.message || String(erro))))
+                    .listarColaboradoresDaPlanilha();
+            });
+        }
+
+        window.sincronizarColaboradoresSheets = async function(exibirResultado = false) {
+            const statusEl = document.getElementById('sheetsSyncStatus');
+            const botao = document.getElementById('btnSyncSheets');
+            if (statusEl) statusEl.textContent = 'Consultando Google Sheets...';
+            if (botao) botao.disabled = true;
+
+            try {
+                const linhas = await carregarColaboradoresProtegidos();
+                const porCpf = new Map();
+
+                (linhas || []).forEach(linha => {
+                    const cpfFormatado = String(linha.cpf || '').trim();
+                    const cpfDigitos = cpfFormatado.replace(/\D/g, '').padStart(11, '0');
+                    const nome = String(linha.nome || '').trim();
+                    const observacao = String(linha.observacao || '').trim();
+                    const pix = observacao.replace(/^\s*pix\s*:\s*/i, '').trim();
+                    if (cpfDigitos.length !== 11 || !nome || !pix) return;
+
+                    porCpf.set(cpfDigitos, {
+                        nome,
+                        cpf: formatCPF(cpfDigitos),
+                        pix,
+                        pixTipo: identificarTipoPix(pix, cpfDigitos)
+                    });
+                });
+
+                let incluidos = 0;
+                let atualizados = 0;
+                porCpf.forEach(item => {
+                    const indice = colaboradores.findIndex(c => (c.cpf || '').replace(/\D/g, '') === item.cpf.replace(/\D/g, ''));
+                    if (indice >= 0) {
+                        colaboradores[indice] = { ...colaboradores[indice], ...item };
+                        atualizados++;
+                    } else {
+                        colaboradores.push({
+                            id: `sheets-${item.cpf.replace(/\D/g, '')}`,
+                            ...item,
+                            setor: '',
+                            valor: 0,
+                            status: 'pendente',
+                            origem: 'google-sheets'
+                        });
+                        incluidos++;
+                    }
+                });
+
+                localStorage.setItem('diarias_colaboradores', JSON.stringify(colaboradores));
+                populateNomeSelect();
+                if (document.getElementById('colabsModal').classList.contains('active')) renderColabsTable();
+
+                const mensagem = `${porCpf.size} colaboradores sincronizados (${incluidos} novos, ${atualizados} atualizados).`;
+                if (statusEl) statusEl.textContent = mensagem;
+                localStorage.setItem('diarias_ultima_sincronizacao', new Date().toISOString());
+                if (exibirResultado) alert(mensagem);
+            } catch (erro) {
+                const mensagem = `Falha na sincronização: ${erro.message}`;
+                if (statusEl) statusEl.textContent = mensagem;
+                if (exibirResultado) alert(mensagem);
+                console.error(erro);
+            } finally {
+                if (botao) botao.disabled = false;
+            }
+        };
+
         // =============================================
         // FILTRO DE SEMANA
         // =============================================
@@ -615,6 +710,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             setupFilter();
             populateNomeSelect();
+            sincronizarColaboradoresSheets(false);
 
             const form = document.getElementById('paymentForm');
             const nomeSelect = document.getElementById('nome');
@@ -1207,6 +1303,9 @@
                 return sA === 'pendente' ? -1 : 1; // pendentes sobem
             });
             const tipoLabels = { CPF: 'CPF', Telefone: 'Tel', Email: 'E-mail', Aleatoria: 'Aleat.' };
+            const escapeHtml = valor => String(valor ?? '')
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
             sorted.forEach(c => {
                 const status = c.status || 'pendente';
                 const badgeClass = status === 'validado' ? 'badge-validado' : 'badge-pendente';
@@ -1214,13 +1313,14 @@
                 const badgeLabel = status === 'validado' ? 'Validado' : 'Pendente';
                 const tr = document.createElement('tr');
                 const tipoLabel = tipoLabels[c.pixTipo] || '';
-                const pixDisplay = tipoLabel ? `<span style="font-size:11px;background:#eef2ff;color:var(--primary-color);padding:2px 6px;border-radius:4px;font-weight:600;margin-right:4px;">${tipoLabel}</span>${c.pix}` : c.pix;
+                const pixSeguro = escapeHtml(c.pix);
+                const pixDisplay = tipoLabel ? `<span style="font-size:11px;background:#eef2ff;color:var(--primary-color);padding:2px 6px;border-radius:4px;font-weight:600;margin-right:4px;">${tipoLabel}</span>${pixSeguro}` : pixSeguro;
                 const setorDisplay = c.setor
-                    ? `<span style="color:var(--text-muted); font-size:13px;">${c.setor}</span>`
+                    ? `<span style="color:var(--text-muted); font-size:13px;">${escapeHtml(c.setor)}</span>`
                     : `<span style="color:#f59e0b; font-size:12px; font-style:italic;">— não informado —</span>`;
                 tr.innerHTML = `
-                    <td style="font-weight:500;">${c.nome}</td>
-                    <td style="font-family:monospace; font-size:13px;">${c.cpf}</td>
+                    <td style="font-weight:500;">${escapeHtml(c.nome)}</td>
+                    <td style="font-family:monospace; font-size:13px;">${escapeHtml(c.cpf)}</td>
                     <td>${setorDisplay}</td>
                     <td class="text-right">${formatCurrency(Number(c.valor))}</td>
                     <td style="font-family:monospace; font-size:13px; color:var(--text-muted);">${pixDisplay}</td>
