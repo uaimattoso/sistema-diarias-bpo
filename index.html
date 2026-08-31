@@ -265,9 +265,10 @@
         .btn-save:hover { background-color: var(--primary-hover); }
 
         /* Collaborators modal */
-        .modal-colabs { background-color: #fff; padding: 32px; border-radius: 16px; width: 100%; max-width: 780px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15); display: flex; flex-direction: column; gap: 24px; }
-        .modal-colabs h3 { font-size: 20px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; }
-        .modal-colabs h3 button { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--text-muted); line-height: 1; }
+        #colabsModal { padding: 18px; }
+        .modal-colabs { background-color: #fff; padding: 30px 36px; border-radius: 16px; width: 96vw; max-width: 1400px; max-height: 94vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15); display: flex; flex-direction: column; gap: 28px; }
+        .modal-colabs h3 { font-size: 24px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; }
+        .modal-colabs h3 button { background: #f3f4f6; border: 1px solid var(--border-color); border-radius: 8px; min-height: 42px; padding: 0 14px; font-size: 14px; font-weight: 700; cursor: pointer; color: #374151; line-height: 1; }
         .modal-colabs h3 button:hover { color: var(--text-main); }
 
         /* === MODAL COLABORADORES – estilos isolados sob #modal-colaboradores === */
@@ -304,14 +305,25 @@
         }
 
         .btn-add-colab {
-            height: 44px; padding: 0 20px; background-color: var(--primary-color); color: #fff;
-            border: none; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer;
+            min-height: 48px; padding: 0 22px; background-color: var(--primary-color); color: #fff;
+            border: none; border-radius: 8px; font-weight: 700; font-size: 15px; cursor: pointer;
             transition: background-color 0.2s; display: inline-flex; align-items: center; gap: 6px;
         }
         .btn-add-colab:hover { background-color: var(--primary-hover); }
 
         .colabs-table-wrap { border: 1px solid var(--border-color); border-radius: 12px; overflow-x: auto; }
-        .colabs-table-wrap table { min-width: 560px; }
+        .colabs-table-wrap table { min-width: 1120px; table-layout: fixed; }
+        #colabsTable th { font-size: 13px; padding: 16px 12px; }
+        #colabsTable td { font-size: 14px; padding: 16px 12px; overflow-wrap: anywhere; }
+        #colabsTable th:nth-child(1) { width: 18%; }
+        #colabsTable th:nth-child(2) { width: 13%; }
+        #colabsTable th:nth-child(3) { width: 14%; }
+        #colabsTable th:nth-child(4) { width: 11%; }
+        #colabsTable th:nth-child(5) { width: 18%; }
+        #colabsTable th:nth-child(6) { width: 12%; }
+        #colabsTable th:nth-child(7) { width: 14%; }
+        #colabsTable .action-buttons { flex-direction: column; align-items: stretch; }
+        #colabsTable .btn-edit, #colabsTable .btn-delete { min-height: 38px; font-size: 13px; }
 
         /* === BADGES DE STATUS (Quarentena de Dados) === */
         .badge-status {
@@ -336,6 +348,9 @@
             #paymentForm .form-grid { grid-template-columns: 1fr; }
             .card { padding: 24px; }
             #modal-colaboradores .colab-form-grid { grid-template-columns: 1fr; }
+            #colabsModal { padding: 8px; }
+            .modal-colabs { width: 100%; max-height: 98vh; padding: 22px 16px; }
+            .modal-colabs h3 { font-size: 20px; }
         }
     </style>
 </head>
@@ -488,8 +503,12 @@
         <div class="modal-colabs" id="modal-colaboradores">
             <h3>
                 👥 Gerenciar Colaboradores
-                <button onclick="closeColabsModal()" title="Fechar">✕</button>
+                <button onclick="closeColabsModal()" title="Fechar">✕ Fechar</button>
             </h3>
+
+            <p style="font-size:15px; line-height:1.5; color:var(--text-muted); margin-top:-16px;">
+                Cadastre uma pessoa nova ou use os botões da última coluna para alterar um cadastro existente.
+            </p>
 
             <!-- Formulário de cadastro -->
             <div>
@@ -547,8 +566,8 @@
             <div>
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; flex-wrap:wrap;">
                     <div>
-                        <p style="font-size:14px; font-weight:600; color:var(--text-main); margin:0;">Colaboradores Cadastrados</p>
-                        <small id="sheetsSyncStatus" style="color:var(--text-muted);">Sincronização com Google Sheets habilitada.</small>
+                        <p style="font-size:17px; font-weight:700; color:var(--text-main); margin:0;">Pessoas cadastradas</p>
+                        <small id="sheetsSyncStatus" style="color:var(--text-muted); font-size:13px;">Sincronização com Google Sheets habilitada.</small>
                     </div>
                     <button id="btnSyncSheets" class="btn-add-colab" style="flex:none; padding:9px 14px;" onclick="sincronizarColaboradoresSheets(true)">
                         🔄 Atualizar pelo Sheets
@@ -563,8 +582,8 @@
                                 <th>Setor</th>
                                 <th class="text-right">Valor Diária</th>
                                 <th>PIX</th>
-                                <th class="text-center">Status</th>
-                                <th class="text-center">Ações</th>
+                                <th class="text-center">Situação</th>
+                                <th class="text-center">O que fazer</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1473,8 +1492,8 @@
                     <td class="text-center"><span class="badge-status ${badgeClass}">${badgeIcon} ${badgeLabel}</span></td>
                     <td>
                         <div class="action-buttons">
-                            <button class="btn-edit" onclick="editColab('${c.id}')">Editar</button>
-                            <button class="btn-delete" onclick="deleteColab('${c.id}')">Excluir</button>
+                            <button class="btn-edit" onclick="editColab('${c.id}')">✏️ Alterar dados</button>
+                            <button class="btn-delete" onclick="deleteColab('${c.id}')">🗑️ Apagar</button>
                         </div>
                     </td>
                 `;
