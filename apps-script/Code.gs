@@ -8,7 +8,7 @@
 const DIARIAS = Object.freeze({
   spreadsheetId: '133Nv2tzOZOzMSgQdF_MCE5X3J6BPb62C9YbmjTOds9Q',
   sheetName: 'Página1',
-  interfaceUrl: 'https://raw.githubusercontent.com/uaimattoso/sistema-diarias-bpo/main/index.html?v=85943b5',
+  interfaceUrl: 'https://raw.githubusercontent.com/uaimattoso/sistema-diarias-bpo/85943b5/index.html',
   firebaseApiKey: 'AIzaSyBjK_9axgVosw0ksePw85uEoB-5ma1IlLs'
 });
 
