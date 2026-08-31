@@ -1,6 +1,6 @@
 # Web App protegido — Sistema de Diárias
 
-Esta pasta contém a camada privada do sistema. Ela lê a planilha no servidor e mantém tokens do Conta Azul fora do HTML e do GitHub.
+Esta pasta contém a camada privada do sistema. Nesta primeira etapa, ela lê CPF, nome e PIX da planilha no servidor sem expor esses dados no HTML ou no GitHub.
 
 ## Implantação inicial
 
@@ -14,8 +14,4 @@ Esta pasta contém a camada privada do sistema. Ela lê a planilha no servidor e
 
 O endereço `/exec` gerado será o novo acesso remoto protegido.
 
-## Conta Azul
-
-As credenciais e tokens devem ser salvos em **Configurações do projeto → Propriedades do script**. Nunca coloque `client_secret`, `access_token` ou `refresh_token` no HTML ou no GitHub.
-
-A função `listarFornecedoresContaAzul` usa a API de Pessoas (`/v1/pessoas`) filtrada pelo perfil `Fornecedor`. A etapa seguinte é ligar o fluxo OAuth e definir a regra de conciliação por CPF antes de permitir qualquer atualização no CRM.
+O Conta Azul não faz parte desta primeira implantação. Ele será tratado separadamente depois que a leitura da planilha estiver validada.
